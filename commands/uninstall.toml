@@ -1,0 +1,2 @@
+description = "Clean up claude-usage-bar state before uninstalling the plugin"
+prompt = "Run `node \"${CLAUDE_PLUGIN_ROOT}/bin/cleanup.js\"` and report the result verbatim. Then remind the user to run `/plugin uninstall claude-usage-bar@claude-usage-bar` to remove the plugin itself."

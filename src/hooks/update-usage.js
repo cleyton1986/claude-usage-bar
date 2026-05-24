@@ -73,7 +73,6 @@ function getOAuthToken() {
   if (!creds || !creds.claudeAiOauth) return null;
   const oauth = creds.claudeAiOauth;
   if (!oauth.accessToken) return null;
-  if (oauth.expiresAt && Date.now() > oauth.expiresAt) return null;
   return { token: oauth.accessToken };
 }
 
@@ -155,23 +154,26 @@ async function main() {
 
   // Optional: fetch quota from Anthropic OAuth endpoint as a fallback when
   // statusLine stdin doesn't carry rate_limits (e.g. when using a proxy).
-  // TTL: reuse cached quota if updated within the last 60 seconds.
   let quota = null;
-  const existingCache = readJson(cacheFile);
-  const cachedQuota = existingCache && existingCache.quota;
-  const cacheAge = existingCache ? (Date.now() - (existingCache.updatedAt || 0)) : Infinity;
-  if (cachedQuota && cacheAge < 60_000) {
-    quota = cachedQuota;
-  } else {
-    const oauth = getOAuthToken();
-    if (oauth) {
-      const usage = await fetchAnthropicUsage(oauth.token);
-      if (usage) {
-        quota = {
-          fiveHour:  usage.five_hour  || null,
-          sevenDay:  usage.seven_day  || null,
-        };
-      }
+  let hadOauthToken = false;
+  let quotaSource = 'none';
+  const oauth = getOAuthToken();
+  if (oauth) {
+    hadOauthToken = true;
+    const usage = await fetchAnthropicUsage(oauth.token);
+    if (usage) {
+      quota = {
+        fiveHour:  usage.five_hour  || null,
+        sevenDay:  usage.seven_day  || null,
+      };
+      quotaSource = 'http-fetch';
+    }
+  }
+  if (!quota) {
+    const existingCache = readJson(cacheFile);
+    if (existingCache && existingCache.quota) {
+      quota = existingCache.quota;
+      quotaSource = 'prev-cache';
     }
   }
 
@@ -188,8 +190,8 @@ async function main() {
     quota,
     debug: {
       hadTranscriptPath: !!transcriptPath,
-      hadOauthToken: !!oauth,
-      quotaSource: quota ? (cacheAge < 60_000 ? 'ttl-cache' : 'http-fetch') : 'none',
+      hadOauthToken,
+      quotaSource,
     },
   };
 

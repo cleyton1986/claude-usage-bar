@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-usage-bar",
+  "description": "Live context window and daily token usage as color-coded progress bars in the Claude Code status line.",
+  "owner": {
+    "name": "Cleyton Lima",
+    "url": "https://github.com/cleyton1986"
+  },
+  "plugins": [
+    {
+      "name": "claude-usage-bar",
+      "description": "Two progress bars in the status line: current context usage and daily token consumption. Combines with any existing statusLine.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

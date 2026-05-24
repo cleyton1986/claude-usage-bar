@@ -1,0 +1,37 @@
+{
+  "name": "claude-usage-bar",
+  "description": "Live context window and daily token usage shown as color-coded progress bars in the Claude Code status line.",
+  "author": {
+    "name": "Cleyton Lima",
+    "url": "https://github.com/cleyton1986"
+  },
+  "homepage": "https://github.com/cleyton1986/claude-usage-bar",
+  "repository": "https://github.com/cleyton1986/claude-usage-bar",
+  "license": "MIT",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/setup.js\"",
+            "timeout": 10,
+            "statusMessage": "Setting up usage bar..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/update-usage.js\"",
+            "timeout": 8,
+            "statusMessage": "Updating usage bar..."
+          }
+        ]
+      }
+    ]
+  }
+}

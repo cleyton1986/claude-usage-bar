@@ -1,0 +1,26 @@
+{
+  "name": "claude-usage-bar",
+  "version": "1.0.0",
+  "description": "Live context and daily token usage progress bars for Claude Code status line.",
+  "license": "MIT",
+  "author": "Cleyton Lima",
+  "homepage": "https://github.com/cleyton1986/claude-usage-bar",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cleyton1986/claude-usage-bar.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cleyton1986/claude-usage-bar/issues"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "plugin",
+    "statusline",
+    "tokens",
+    "usage"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -30,34 +30,49 @@ Tested on Linux. Should work on macOS and WSL. Not tested on native Windows (Pow
 
 ## Installation
 
-### From the marketplace (recommended)
+### Option A — Terminal (works on macOS, Linux, WSL)
 
-Inside Claude Code:
+Run these three commands in your terminal:
+
+```bash
+claude plugins marketplace add cleyton1986/claude-usage-bar
+claude plugins install claude-usage-bar@claude-usage-bar
+claude plugins list
+```
+
+The last command should show `claude-usage-bar@claude-usage-bar` with status **enabled**.
+
+**Then fully quit and reopen Claude Code** (not just a new conversation — the app itself must restart). On the next session start the `SessionStart` hook runs automatically and wires the bars into your status line.
+
+> **macOS note**: if Claude Code is open in the Dock, right-click → Quit before reopening. A new conversation window is not enough.
+
+### Option B — Inside Claude Code (slash commands)
 
 ```text
 /plugin marketplace add cleyton1986/claude-usage-bar
 /plugin install claude-usage-bar@claude-usage-bar
 ```
 
-Then **restart Claude Code**. On the next session start, the plugin will:
+Then **fully quit and reopen Claude Code**.
 
-1. Back up your current `~/.claude/settings.json` to `~/.claude/settings.json.usage-bar.bak` (one-shot, only if no backup exists yet)
-2. Save your existing `statusLine` command to `~/.claude/.usage-bar-prev-statusline`
-3. Install its wrapper as the new `statusLine`
+### Verify it worked
 
-The wrapper runs your previous status line first and appends the usage bars after it — nothing is overwritten or lost.
+After restarting, send any message. The status line should show three rows:
+
+```
+CONTEXT(Sonnet-4-6) ███░░░░░░░  30% 306k/1.0M [sess:166k]
+Tokens session      ███░░░░░░░  33% ↻ 47m
+Tokens Week         █░░░░░░░░░  17% ↻ 2d
+```
+
+If bars don't appear, see [Troubleshooting](#troubleshooting).
 
 ### From source (for development)
 
 ```bash
 git clone https://github.com/cleyton1986/claude-usage-bar.git
-```
-
-Then in Claude Code:
-
-```text
-/plugin marketplace add /absolute/path/to/claude-usage-bar
-/plugin install claude-usage-bar@claude-usage-bar
+claude plugins marketplace add /absolute/path/to/claude-usage-bar
+claude plugins install claude-usage-bar@claude-usage-bar
 ```
 
 ---
@@ -116,8 +131,10 @@ node -e "const fs=require('fs'),p=require('os').homedir()+'/.claude/settings.jso
 ## Troubleshooting
 
 **Bars not showing after install**
-- Restart Claude Code — the `SessionStart` hook only fires on a new session
+- Fully quit and reopen Claude Code — the `SessionStart` hook only fires when the app starts a new session
+- Run `claude plugins list` and verify `claude-usage-bar@claude-usage-bar` is **enabled**
 - Check `~/.claude/settings.json` — the `statusLine.command` should point to `.../claude-usage-bar/.../src/wrapper.sh`
+- Send one message after restart — the cache is populated by the first prompt hook
 
 **Only CONTEXT(Model) bar shows, no Tokens session / Tokens Week**
 - Expected if you're on an API-key setup (no Pro/Max plan) — these limits don't exist for API-billed accounts

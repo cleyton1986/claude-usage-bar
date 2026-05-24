@@ -4,9 +4,9 @@
 # Reads Claude Code's session JSON from stdin (official fields:
 # context_window.*, rate_limits.*, model.*) and renders three lines:
 #
-#   CTX  <bar>  <pct>%  <tokens>/<window>  [sess:<output>]
-#   5H   <bar>  <pct>%  ↻ <reset>
-#   7D   <bar>  <pct>%  ↻ <reset>
+#   CONTEXT -  <bar>  <pct>%  <tokens>/<window>  [sess:<output>]
+#   Tokens session  <bar>  <pct>%  ↻ <reset>
+#   Tokens Week     <bar>  <pct>%  ↻ <reset>
 #
 # Falls back to ~/.claude/.usage-bar-cache.json (written by update-usage.js)
 # when stdin does not contain the expected fields — e.g. when the script
@@ -168,13 +168,13 @@ GRAY='\033[90m'
 # Line 1 — CTX (always)
 CTX_COLOR=$(color_for_pct "$CTX_PCT")
 CTX_BAR=$(make_bar "$CTX_PCT" 10)
-printf "${GRAY}CTX${RESET} ${CTX_COLOR}${CTX_BAR}${RESET} %3d%% ${GRAY}${CTX_TOK}/${CTX_WIN}${RESET} ${GRAY}[sess:${SESS_OUT}]${RESET}" "$CTX_PCT"
+printf "${GRAY}CONTEXT -${RESET} ${CTX_COLOR}${CTX_BAR}${RESET} %3d%% ${GRAY}${CTX_TOK}/${CTX_WIN}${RESET} ${GRAY}[sess:${SESS_OUT}]${RESET}" "$CTX_PCT"
 
 # Line 2 — 5H (only if available)
 if [ -n "$FIVE_PCT" ] && [ "$FIVE_PCT" -ge 0 ]; then
   FIVE_COLOR=$(color_for_pct "$FIVE_PCT")
   FIVE_BAR=$(make_bar "$FIVE_PCT" 10)
-  printf "\n${GRAY}5H ${RESET} ${FIVE_COLOR}${FIVE_BAR}${RESET} %3d%%" "$FIVE_PCT"
+  printf "\n${GRAY}Tokens session${RESET} ${FIVE_COLOR}${FIVE_BAR}${RESET} %3d%%" "$FIVE_PCT"
   [ -n "$FIVE_RESET" ] && printf " ${GRAY}↻ ${FIVE_RESET}${RESET}"
 fi
 
@@ -182,6 +182,6 @@ fi
 if [ -n "$SEVEN_PCT" ] && [ "$SEVEN_PCT" -ge 0 ]; then
   SEVEN_COLOR=$(color_for_pct "$SEVEN_PCT")
   SEVEN_BAR=$(make_bar "$SEVEN_PCT" 10)
-  printf "\n${GRAY}7D ${RESET} ${SEVEN_COLOR}${SEVEN_BAR}${RESET} %3d%%" "$SEVEN_PCT"
+  printf "\n${GRAY}Tokens Week${RESET} ${SEVEN_COLOR}${SEVEN_BAR}${RESET} %3d%%" "$SEVEN_PCT"
   [ -n "$SEVEN_RESET" ] && printf " ${GRAY}↻ ${SEVEN_RESET}${RESET}"
 fi

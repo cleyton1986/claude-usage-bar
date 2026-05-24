@@ -1,0 +1,28 @@
+description = "Show current claude-usage-bar usage numbers from cache"
+prompt = """
+Run this shell command and print the output verbatim:
+
+```bash
+node -e "
+const fs = require('fs'), path = require('path'), os = require('os');
+const f = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), '.usage-bar-cache.json');
+try {
+  const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+  const age = Math.round((Date.now() - (c.updatedAt || 0)) / 1000);
+  const fmt = n => { n = parseInt(n||0); if(n>=1e6) return (n/1e6).toFixed(1)+'M'; if(n>=1e3) return Math.round(n/1e3)+'k'; return String(n); };
+  const pct = (n,d) => d ? Math.min(100,Math.round(n/d*100)) : 0;
+  const ctx = c.ctx || {};
+  const sess = c.session || {};
+  const q = c.quota || {};
+  const fh = q.fiveHour || {};
+  const sd = q.sevenDay || {};
+  console.log('claude-usage-bar status (cache age: ' + age + 's)');
+  console.log('  Model          : ' + (c.model || 'unknown'));
+  console.log('  CONTEXT -      : ' + fmt(ctx.tokens) + ' / ' + fmt(ctx.window) + '  (' + Math.round(ctx.pct||0) + '%)');
+  console.log('  Session output : ' + fmt(sess.outputTokens));
+  if (fh.utilization != null) console.log('  Tokens session : ' + Math.round(fh.utilization) + '%  resets: ' + (fh.resets_at || '?'));
+  if (sd.utilization != null) console.log('  Tokens Week    : ' + Math.round(sd.utilization) + '%  resets: ' + (sd.resets_at || '?'));
+} catch(e) { console.log('No cache found. Send a message first to populate it.'); }
+"
+```
+"""

@@ -17,12 +17,14 @@
 
 set -u
 
-CACHE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.usage-bar-cache.json"
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+CACHE="$CLAUDE_DIR/.usage-bar-cache.json"
+CONFIG="$CLAUDE_DIR/.usage-bar-config.json"
 
 # Capture stdin (the JSON Claude Code passes to statusLine)
 STDIN=$(cat 2>/dev/null || true)
 
-PARSED=$(STDIN="$STDIN" CACHE="$CACHE" python3 <<'PYEOF'
+PARSED=$(STDIN="$STDIN" CACHE="$CACHE" CONFIG="$CONFIG" python3 <<'PYEOF'
 import sys, json, os, datetime
 
 def load_stdin():
@@ -41,6 +43,26 @@ def load_cache():
             return json.load(f)
     except Exception:
         return {}
+
+def load_config():
+    p = os.environ.get("CONFIG", "")
+    try:
+        with open(p) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def short_model(model):
+    if not model:
+        return ""
+    # strip trailing -YYYYMMDD build stamp
+    import re
+    m = re.sub(r'-\d{8}$', '', model)
+    # keep only last two segments (family-variant)
+    parts = m.split('-')
+    if len(parts) >= 3:
+        return '-'.join(parts[-3:]) if parts[-3].isdigit() else '-'.join(parts[-2:])
+    return m
 
 def fmt(n):
     try:
@@ -74,6 +96,22 @@ def reset_str(value):
 
 stdin = load_stdin() or {}
 cache = load_cache() or {}
+config = load_config() or {}
+
+bar_width = int(config.get("bar_width", 10) or 10)
+bar_width = max(4, min(40, bar_width))
+show_context = bool(config.get("show_context", True))
+show_session = bool(config.get("show_session", True))
+show_week = bool(config.get("show_week", True))
+
+model = ""
+if isinstance(stdin.get("model"), dict):
+    model = stdin.get("model", {}).get("id") or stdin.get("model", {}).get("name") or ""
+elif stdin.get("model"):
+    model = str(stdin.get("model"))
+if not model:
+    model = cache.get("model") or ""
+model = short_model(model)
 
 # Context window — prefer stdin (official), fall back to cache
 ctx = stdin.get("context_window") or {}
@@ -133,16 +171,21 @@ print(five_pct)
 print(five_reset)
 print(seven_pct)
 print(seven_reset)
+print(model)
+print(bar_width)
+print(1 if show_context else 0)
+print(1 if show_session else 0)
+print(1 if show_week else 0)
 PYEOF
 )
 
 [ -z "$PARSED" ] && exit 0
 
-IFS=$'\n' read -r -d '' CTX_PCT CTX_TOK CTX_WIN SESS_OUT FIVE_PCT FIVE_RESET SEVEN_PCT SEVEN_RESET _ <<< "$PARSED"$'\n\0'
+IFS=$'\n' read -r -d '' CTX_PCT CTX_TOK CTX_WIN SESS_OUT FIVE_PCT FIVE_RESET SEVEN_PCT SEVEN_RESET MODEL BAR_WIDTH SHOW_CONTEXT SHOW_SESSION SHOW_WEEK _ <<< "$PARSED"$'\n\0'
 
 make_bar() {
   local pct=$1
-  local width=${2:-10}
+  local width=${BAR_WIDTH:-10}
   [ "$pct" -lt 0 ] && pct=0
   [ "$pct" -gt 100 ] && pct=100
   local filled=$(( pct * width / 100 ))
@@ -165,23 +208,30 @@ color_for_pct() {
 RESET='\033[0m'
 GRAY='\033[90m'
 
-# Line 1 — CTX (always)
-CTX_COLOR=$(color_for_pct "$CTX_PCT")
-CTX_BAR=$(make_bar "$CTX_PCT" 10)
-printf "${GRAY}CONTEXT -     ${RESET} ${CTX_COLOR}${CTX_BAR}${RESET} %3d%% ${GRAY}${CTX_TOK}/${CTX_WIN}${RESET} ${GRAY}[sess:${SESS_OUT}]${RESET}" "$CTX_PCT"
+NEEDS_NEWLINE=0
 
-# Line 2 — 5H (only if available)
-if [ -n "$FIVE_PCT" ] && [ "$FIVE_PCT" -ge 0 ]; then
-  FIVE_COLOR=$(color_for_pct "$FIVE_PCT")
-  FIVE_BAR=$(make_bar "$FIVE_PCT" 10)
-  printf "\n${GRAY}Tokens session${RESET} ${FIVE_COLOR}${FIVE_BAR}${RESET} %3d%%" "$FIVE_PCT"
-  [ -n "$FIVE_RESET" ] && printf " ${GRAY}↻ ${FIVE_RESET}${RESET}"
+if [ "${SHOW_CONTEXT:-1}" = "1" ]; then
+  CTX_COLOR=$(color_for_pct "$CTX_PCT")
+  CTX_BAR=$(make_bar "$CTX_PCT")
+  MODEL_SUFFIX=""
+  [ -n "$MODEL" ] && MODEL_SUFFIX=" ${GRAY}[$MODEL]${RESET}"
+  printf "${GRAY}CONTEXT -     ${RESET} ${CTX_COLOR}${CTX_BAR}${RESET} %3d%% ${GRAY}${CTX_TOK}/${CTX_WIN}${RESET} ${GRAY}[sess:${SESS_OUT}]${RESET}${MODEL_SUFFIX}" "$CTX_PCT"
+  NEEDS_NEWLINE=1
 fi
 
-# Line 3 — 7D (only if available)
-if [ -n "$SEVEN_PCT" ] && [ "$SEVEN_PCT" -ge 0 ]; then
+if [ "${SHOW_SESSION:-1}" = "1" ] && [ -n "$FIVE_PCT" ] && [ "$FIVE_PCT" -ge 0 ]; then
+  FIVE_COLOR=$(color_for_pct "$FIVE_PCT")
+  FIVE_BAR=$(make_bar "$FIVE_PCT")
+  [ "$NEEDS_NEWLINE" = "1" ] && printf "\n"
+  printf "${GRAY}Tokens session${RESET} ${FIVE_COLOR}${FIVE_BAR}${RESET} %3d%%" "$FIVE_PCT"
+  [ -n "$FIVE_RESET" ] && printf " ${GRAY}↻ ${FIVE_RESET}${RESET}"
+  NEEDS_NEWLINE=1
+fi
+
+if [ "${SHOW_WEEK:-1}" = "1" ] && [ -n "$SEVEN_PCT" ] && [ "$SEVEN_PCT" -ge 0 ]; then
   SEVEN_COLOR=$(color_for_pct "$SEVEN_PCT")
-  SEVEN_BAR=$(make_bar "$SEVEN_PCT" 10)
-  printf "\n${GRAY}Tokens Week   ${RESET} ${SEVEN_COLOR}${SEVEN_BAR}${RESET} %3d%%" "$SEVEN_PCT"
+  SEVEN_BAR=$(make_bar "$SEVEN_PCT")
+  [ "$NEEDS_NEWLINE" = "1" ] && printf "\n"
+  printf "${GRAY}Tokens Week   ${RESET} ${SEVEN_COLOR}${SEVEN_BAR}${RESET} %3d%%" "$SEVEN_PCT"
   [ -n "$SEVEN_RESET" ] && printf " ${GRAY}↻ ${SEVEN_RESET}${RESET}"
 fi

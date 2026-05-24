@@ -20,6 +20,9 @@
     "tokens",
     "usage"
   ],
+  "scripts": {
+    "test": "node test/setup.test.js && node test/cleanup.test.js"
+  },
   "engines": {
     "node": ">=18"
   }

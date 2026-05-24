@@ -88,22 +88,23 @@ No configuration required. The plugin auto-detects the current model, its contex
 | File | Purpose |
 |---|---|
 | `src/hooks/setup.js` | `SessionStart` hook — installs the wrapper into `settings.json` (idempotent) |
-| `src/hooks/update-usage.js` | `UserPromptSubmit` hook — sums session output tokens from the JSONL transcript into a cache |
-| `src/statusline.sh` | Reads Claude Code's stdin JSON (and the cache as fallback), renders the progress bars |
+| `src/hooks/update-usage.js` | `UserPromptSubmit` hook — caches session output tokens and quota as fallback |
+| `src/statusline.sh` | Reads Claude Code's stdin JSON in real-time, renders the progress bars |
 | `src/wrapper.sh` | Statusline glue — pipes stdin to your previous statusLine command and to the renderer, then concatenates outputs |
 
-### Data sources
+### Data sources (real-time, no stale cache)
 
-All values come straight from Claude Code itself — no network calls, no third-party endpoints.
+All values are read fresh on every render — there is no caching of live data.
 
-**Context bar (CONTEXT(Model))** — from the `context_window` field on stdin:
-- `context_window.used_percentage` (and `context_window_size`) — written by Claude Code after each API response
-- Falls back to summing `input_tokens + cache_read + cache_creation` from the current JSONL transcript when stdin is unavailable
+**Context bar (CONTEXT(Model))**
+- **Model name**: read directly from the latest JSONL transcript (`~/.claude/projects/**/*.jsonl`) — reflects the actual model in use, including any proxy-routed model.
+- **Context %**: from `context_window.used_percentage` on stdin (written by Claude Code after each API response), falling back to summing `input_tokens + cache_read + cache_creation` from the current JSONL when stdin lacks it.
 
-**Tokens session and Tokens Week quota bars** — two-tier source:
+**Tokens session and Tokens Week quota bars** — three-tier, all real-time:
 
-1. **Primary**: from `rate_limits.five_hour` / `rate_limits.seven_day` on stdin. Sent by Claude Code only for Claude.ai Pro/Max subscribers, and only when the API response carries the `anthropic-ratelimit-*` headers (some proxies strip them).
-2. **Fallback**: when stdin lacks `rate_limits`, the `UserPromptSubmit` hook queries `https://api.anthropic.com/api/oauth/usage` using the OAuth token already stored in `~/.claude/.credentials.json`, and writes the values into `~/.claude/.usage-bar-cache.json`. The status line reads them from there.
+1. **stdin** — `rate_limits.five_hour` / `rate_limits.seven_day` on the statusLine stdin JSON. Present for Claude.ai Pro/Max when the API response carries `anthropic-ratelimit-*` headers. Not present when a proxy strips those headers.
+2. **OAuth endpoint** (live HTTP) — when stdin lacks `rate_limits`, the renderer calls `https://api.anthropic.com/api/oauth/usage` using the OAuth token in `~/.claude/.credentials.json`. This ensures quota is always current even through proxies.
+3. **Cache** — written by the `UserPromptSubmit` hook as a last-resort fallback only. Stale if the OAuth call fails.
 
 If neither source is available (e.g. API-key-only setup), the Tokens session/Tokens Week bars are simply skipped — the limits don't apply to API-billed accounts.
 
@@ -134,15 +135,17 @@ node -e "const fs=require('fs'),p=require('os').homedir()+'/.claude/settings.jso
 - Fully quit and reopen Claude Code — the `SessionStart` hook only fires when the app starts a new session
 - Run `claude plugins list` and verify `claude-usage-bar@claude-usage-bar` is **enabled**
 - Check `~/.claude/settings.json` — the `statusLine.command` should point to `.../claude-usage-bar/.../src/wrapper.sh`
-- Send one message after restart — the cache is populated by the first prompt hook
+- Send one message after restart so Claude Code writes fresh stdin/transcript data
 
 **Only CONTEXT(Model) bar shows, no Tokens session / Tokens Week**
 - Expected if you're on an API-key setup (no Pro/Max plan) — these limits don't exist for API-billed accounts
+- Or Claude.ai OAuth credentials are missing/expired in `~/.claude/.credentials.json`
 - Or the session hasn't made its first API call yet (rate-limit fields appear only after the first response)
 
 **Bars stuck at the same numbers**
-- The cache is updated by the `UserPromptSubmit` hook — after you send a message, not on every keystroke
-- Check `~/.claude/.usage-bar-cache.json` — `updatedAt` should be a recent timestamp
+- The renderer reads live stdin/transcript/OAuth first; cache is only a fallback
+- Send one message to force Claude Code to write new statusLine stdin/transcript data
+- If quota stays stale, check whether Claude Code is still signed in to Claude.ai Pro/Max
 
 **`settings.json` keeps getting reset**
 - Some launchers (e.g. provider-switcher scripts) overwrite `~/.claude/settings.json` on each start. Check `~/.zshrc` / `~/.bashrc` for `alias claude=` lines pointing to a switcher script.
@@ -151,8 +154,8 @@ node -e "const fs=require('fs'),p=require('os').homedir()+'/.claude/settings.jso
 
 ## Privacy & security
 
-- The plugin makes **zero** network calls — all data comes from Claude Code's own session JSON on stdin and from local JSONL transcripts
-- It does not read `~/.claude/.credentials.json` or any secret material
+- **Quota fallback**: when Claude Code's stdin lacks `rate_limits` (e.g. through a proxy), the renderer calls `https://api.anthropic.com/api/oauth/usage` using the OAuth token already stored by Claude Code in `~/.claude/.credentials.json`. No token is sent elsewhere.
+- All other data comes from Claude Code's own session JSON on stdin and from local JSONL transcripts — no third-party services.
 - Writes are restricted to `~/.claude/.usage-bar-*` files and the `statusLine` field of `~/.claude/settings.json`
 - The wrapper strips control characters from the previous-statusLine command before executing it (prevents ANSI-escape injection)
 

@@ -168,7 +168,7 @@ GRAY='\033[90m'
 # Line 1 — CTX (always)
 CTX_COLOR=$(color_for_pct "$CTX_PCT")
 CTX_BAR=$(make_bar "$CTX_PCT" 10)
-printf "${GRAY}CONTEXT -${RESET} ${CTX_COLOR}${CTX_BAR}${RESET} %3d%% ${GRAY}${CTX_TOK}/${CTX_WIN}${RESET} ${GRAY}[sess:${SESS_OUT}]${RESET}" "$CTX_PCT"
+printf "${GRAY}CONTEXT -     ${RESET} ${CTX_COLOR}${CTX_BAR}${RESET} %3d%% ${GRAY}${CTX_TOK}/${CTX_WIN}${RESET} ${GRAY}[sess:${SESS_OUT}]${RESET}" "$CTX_PCT"
 
 # Line 2 — 5H (only if available)
 if [ -n "$FIVE_PCT" ] && [ "$FIVE_PCT" -ge 0 ]; then
@@ -182,6 +182,6 @@ fi
 if [ -n "$SEVEN_PCT" ] && [ "$SEVEN_PCT" -ge 0 ]; then
   SEVEN_COLOR=$(color_for_pct "$SEVEN_PCT")
   SEVEN_BAR=$(make_bar "$SEVEN_PCT" 10)
-  printf "\n${GRAY}Tokens Week${RESET} ${SEVEN_COLOR}${SEVEN_BAR}${RESET} %3d%%" "$SEVEN_PCT"
+  printf "\n${GRAY}Tokens Week   ${RESET} ${SEVEN_COLOR}${SEVEN_BAR}${RESET} %3d%%" "$SEVEN_PCT"
   [ -n "$SEVEN_RESET" ] && printf " ${GRAY}↻ ${SEVEN_RESET}${RESET}"
 fi

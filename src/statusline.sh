@@ -104,11 +104,48 @@ show_context = bool(config.get("show_context", True))
 show_session = bool(config.get("show_session", True))
 show_week = bool(config.get("show_week", True))
 
+def latest_model_from_transcript(path):
+    """Read last model from JSONL — most recent non-tool assistant entry."""
+    if not path:
+        return ""
+    import os as _os
+    if not _os.path.exists(path):
+        return ""
+    last = ""
+    try:
+        with open(path, 'rb') as f:
+            # Tail last 32 KB — enough for recent entries
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - 32768))
+            tail = f.read().decode('utf-8', errors='replace')
+        for line in reversed(tail.splitlines()):
+            if not line.strip():
+                continue
+            try:
+                d = json.loads(line)
+                m = (d.get('message') or {}).get('model')
+                if m and m != 'unknown':
+                    last = m
+                    break
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return last
+
 model = ""
-if isinstance(stdin.get("model"), dict):
-    model = stdin.get("model", {}).get("id") or stdin.get("model", {}).get("name") or ""
-elif stdin.get("model"):
-    model = str(stdin.get("model"))
+# 1. transcript JSONL is freshest when OmniRouter rewrites/reroutes models
+#    (stdin.model can stay fixed at Claude Code's configured model)
+tp = cache.get("transcriptPath") or ""
+model = latest_model_from_transcript(tp)
+# 2. stdin official field
+if not model:
+    if isinstance(stdin.get("model"), dict):
+        model = stdin.get("model", {}).get("id") or stdin.get("model", {}).get("name") or ""
+    elif stdin.get("model"):
+        model = str(stdin.get("model"))
+# 3. fallback: cache (may lag one turn)
 if not model:
     model = cache.get("model") or ""
 model = short_model(model)

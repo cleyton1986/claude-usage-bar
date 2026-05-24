@@ -155,6 +155,7 @@ async function main() {
   const cache = {
     updatedAt: Date.now(),
     model,
+    transcriptPath,
     ctx: {
       tokens: ctxTokens,
       window: ctxWindow,

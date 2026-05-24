@@ -4,7 +4,7 @@
 # Reads Claude Code's session JSON from stdin (official fields:
 # context_window.*, rate_limits.*, model.*) and renders three lines:
 #
-#   CONTEXT -  <bar>  <pct>%  <tokens>/<window>  [sess:<output>]
+#   CONTEXT(Model)  <bar>  <pct>%  <tokens>/<window>  [sess:<output>]
 #   Tokens session  <bar>  <pct>%  ↻ <reset>
 #   Tokens Week     <bar>  <pct>%  ↻ <reset>
 #
@@ -55,13 +55,13 @@ def load_config():
 def short_model(model):
     if not model:
         return ""
-    # strip trailing -YYYYMMDD build stamp
     import re
     m = re.sub(r'-\d{8}$', '', model)
-    # keep only last two segments (family-variant)
     parts = m.split('-')
-    if len(parts) >= 3:
-        return '-'.join(parts[-3:]) if parts[-3].isdigit() else '-'.join(parts[-2:])
+    if len(parts) >= 4 and parts[0] == "claude":
+        family = parts[1].capitalize()
+        version = '-'.join(parts[2:])
+        return f"{family}-{version}"
     return m
 
 def fmt(n):
@@ -162,6 +162,21 @@ seven_pct = pct_to_int(seven_pct)
 five_reset  = reset_str(five_reset_raw)
 seven_reset = reset_str(seven_reset_raw)
 
+# Build labels with padding so bars align
+ctx_label_raw = f"CONTEXT({model})" if model else "CONTEXT"
+fixed_labels  = ["Tokens session", "Tokens Week"]
+col_width = max(len(ctx_label_raw), max(len(l) for l in fixed_labels))
+if model:
+    ctx_prefix = "CONTEXT("
+    ctx_model = model
+    ctx_suffix = ")" + " " * (col_width - len(ctx_label_raw))
+else:
+    ctx_prefix = "CONTEXT"
+    ctx_model = ""
+    ctx_suffix = " " * (col_width - len(ctx_prefix))
+session_label  = "Tokens session".ljust(col_width)
+week_label     = "Tokens Week".ljust(col_width)
+
 # Emit one field per line for shell to parse
 print(ctx_pct)
 print(fmt(ctx_tok_total))
@@ -171,17 +186,21 @@ print(five_pct)
 print(five_reset)
 print(seven_pct)
 print(seven_reset)
-print(model)
 print(bar_width)
 print(1 if show_context else 0)
 print(1 if show_session else 0)
 print(1 if show_week else 0)
+print(ctx_prefix)
+print(ctx_model)
+print(ctx_suffix)
+print(session_label)
+print(week_label)
 PYEOF
 )
 
 [ -z "$PARSED" ] && exit 0
 
-IFS=$'\n' read -r -d '' CTX_PCT CTX_TOK CTX_WIN SESS_OUT FIVE_PCT FIVE_RESET SEVEN_PCT SEVEN_RESET MODEL BAR_WIDTH SHOW_CONTEXT SHOW_SESSION SHOW_WEEK _ <<< "$PARSED"$'\n\0'
+IFS=$'\n' read -r -d '' CTX_PCT CTX_TOK CTX_WIN SESS_OUT FIVE_PCT FIVE_RESET SEVEN_PCT SEVEN_RESET BAR_WIDTH SHOW_CONTEXT SHOW_SESSION SHOW_WEEK CTX_PREFIX CTX_MODEL CTX_SUFFIX SESSION_LABEL WEEK_LABEL _ <<< "$PARSED"$'\n\0'
 
 make_bar() {
   local pct=$1
@@ -207,15 +226,14 @@ color_for_pct() {
 
 RESET='\033[0m'
 GRAY='\033[90m'
+RED='\033[31m'
 
 NEEDS_NEWLINE=0
 
 if [ "${SHOW_CONTEXT:-1}" = "1" ]; then
   CTX_COLOR=$(color_for_pct "$CTX_PCT")
   CTX_BAR=$(make_bar "$CTX_PCT")
-  MODEL_SUFFIX=""
-  [ -n "$MODEL" ] && MODEL_SUFFIX=" ${GRAY}[$MODEL]${RESET}"
-  printf "${GRAY}CONTEXT -     ${RESET} ${CTX_COLOR}${CTX_BAR}${RESET} %3d%% ${GRAY}${CTX_TOK}/${CTX_WIN}${RESET} ${GRAY}[sess:${SESS_OUT}]${RESET}${MODEL_SUFFIX}" "$CTX_PCT"
+  printf "${GRAY}${CTX_PREFIX}${RESET}${RED}${CTX_MODEL}${RESET}${GRAY}${CTX_SUFFIX}${RESET} ${CTX_COLOR}${CTX_BAR}${RESET} %3d%% ${GRAY}${CTX_TOK}/${CTX_WIN}${RESET} ${GRAY}[sess:${SESS_OUT}]${RESET}" "$CTX_PCT"
   NEEDS_NEWLINE=1
 fi
 
@@ -223,7 +241,7 @@ if [ "${SHOW_SESSION:-1}" = "1" ] && [ -n "$FIVE_PCT" ] && [ "$FIVE_PCT" -ge 0 ]
   FIVE_COLOR=$(color_for_pct "$FIVE_PCT")
   FIVE_BAR=$(make_bar "$FIVE_PCT")
   [ "$NEEDS_NEWLINE" = "1" ] && printf "\n"
-  printf "${GRAY}Tokens session${RESET} ${FIVE_COLOR}${FIVE_BAR}${RESET} %3d%%" "$FIVE_PCT"
+  printf "${GRAY}${SESSION_LABEL}${RESET} ${FIVE_COLOR}${FIVE_BAR}${RESET} %3d%%" "$FIVE_PCT"
   [ -n "$FIVE_RESET" ] && printf " ${GRAY}↻ ${FIVE_RESET}${RESET}"
   NEEDS_NEWLINE=1
 fi
@@ -232,6 +250,6 @@ if [ "${SHOW_WEEK:-1}" = "1" ] && [ -n "$SEVEN_PCT" ] && [ "$SEVEN_PCT" -ge 0 ];
   SEVEN_COLOR=$(color_for_pct "$SEVEN_PCT")
   SEVEN_BAR=$(make_bar "$SEVEN_PCT")
   [ "$NEEDS_NEWLINE" = "1" ] && printf "\n"
-  printf "${GRAY}Tokens Week   ${RESET} ${SEVEN_COLOR}${SEVEN_BAR}${RESET} %3d%%" "$SEVEN_PCT"
+  printf "${GRAY}${WEEK_LABEL}${RESET} ${SEVEN_COLOR}${SEVEN_BAR}${RESET} %3d%%" "$SEVEN_PCT"
   [ -n "$SEVEN_RESET" ] && printf " ${GRAY}↻ ${SEVEN_RESET}${RESET}"
 fi

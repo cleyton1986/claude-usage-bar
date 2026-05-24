@@ -1,71 +1,134 @@
 #!/usr/bin/env bash
 # claude-usage-bar — statusline renderer.
-# Reads ~/.claude/.usage-bar-cache.json and renders:
-#   CTX bar  — current session context window usage (always shown)
-#   5H bar   — five-hour quota usage (claude.ai Pro/Max plans only)
-#   7D bar   — seven-day quota usage (claude.ai Pro/Max plans only)
 #
-# Colors: green ≤70%, yellow 70–90%, red >90%
-# Requirements: bash >= 4, python3
+# Reads Claude Code's session JSON from stdin (official fields:
+# context_window.*, rate_limits.*, model.*) and renders three lines:
+#
+#   CTX  <bar>  <pct>%  <tokens>/<window>  [sess:<output>]
+#   5H   <bar>  <pct>%  ↻ <reset>
+#   7D   <bar>  <pct>%  ↻ <reset>
+#
+# Falls back to ~/.claude/.usage-bar-cache.json (written by update-usage.js)
+# when stdin does not contain the expected fields — e.g. when the script
+# is invoked manually or before the first API response of the session.
+#
+# Colors: green ≤70%, yellow 70–90%, red >90%.
+# Requirements: bash >= 4, python3.
+
+set -u
 
 CACHE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.usage-bar-cache.json"
 
-[ -L "$CACHE" ] && exit 0
-[ ! -f "$CACHE" ] && exit 0
+# Capture stdin (the JSON Claude Code passes to statusLine)
+STDIN=$(cat 2>/dev/null || true)
 
-PARSED=$(python3 - "$CACHE" <<'PYEOF'
-import sys, json
+PARSED=$(STDIN="$STDIN" CACHE="$CACHE" python3 <<'PYEOF'
+import sys, json, os, datetime
 
-try:
-    with open(sys.argv[1]) as f:
-        d = json.load(f)
-except Exception:
-    sys.exit(0)
+def load_stdin():
+    raw = os.environ.get("STDIN", "").strip()
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+def load_cache():
+    p = os.environ.get("CACHE", "")
+    try:
+        with open(p) as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 def fmt(n):
-    n = int(n or 0)
+    try:
+        n = int(n or 0)
+    except Exception:
+        return "0"
     if n >= 1000000: return f"{n/1000000:.1f}M"
     if n >= 1000:    return f"{n/1000:.0f}k"
     return str(n)
 
-ctx = d.get("ctx") or {}
-ses = d.get("session") or {}
-quota = d.get("quota") or {}
-
-ctx_pct = int(ctx.get("pct", 0))
-ctx_tok = fmt(ctx.get("tokens", 0))
-ctx_win = fmt(ctx.get("window", 200000))
-sess_out = fmt(ses.get("outputTokens", 0))
-
-five = quota.get("fiveHour") or {}
-seven = quota.get("sevenDay") or {}
-five_pct = int(five.get("utilization", -1)) if five else -1
-seven_pct = int(seven.get("utilization", -1)) if seven else -1
-
-# resets_at to local short time
-import datetime
-def reset_str(iso):
-    if not iso: return ""
+def reset_str(value):
+    if not value:
+        return ""
     try:
-        dt = datetime.datetime.fromisoformat(iso.replace("Z","+00:00"))
-        dt_local = dt.astimezone()
-        delta = dt_local - datetime.datetime.now().astimezone()
-        mins = int(delta.total_seconds() / 60)
-        if mins < 0: return ""
-        if mins < 60: return f"{mins}m"
+        if isinstance(value, (int, float)):
+            dt = datetime.datetime.fromtimestamp(value, tz=datetime.timezone.utc)
+        else:
+            dt = datetime.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        now = datetime.datetime.now(datetime.timezone.utc)
+        mins = int((dt - now).total_seconds() / 60)
+        if mins <= 0:
+            return ""
+        if mins < 60:
+            return f"{mins}m"
         hours = mins // 60
-        if hours < 24: return f"{hours}h"
-        return f"{hours//24}d"
+        if hours < 24:
+            return f"{hours}h"
+        return f"{hours // 24}d"
     except Exception:
         return ""
 
-five_reset = reset_str(five.get("resets_at"))
-seven_reset = reset_str(seven.get("resets_at"))
+stdin = load_stdin() or {}
+cache = load_cache() or {}
 
+# Context window — prefer stdin (official), fall back to cache
+ctx = stdin.get("context_window") or {}
+ctx_pct  = ctx.get("used_percentage")
+ctx_win  = ctx.get("context_window_size")
+ctx_in   = (ctx.get("total_input_tokens") or 0)
+ctx_out  = (ctx.get("total_output_tokens") or 0)
+
+if ctx_pct is None or ctx_win is None:
+    c = cache.get("ctx") or {}
+    ctx_pct = c.get("pct", 0)
+    ctx_win = c.get("window", 200000)
+    ctx_in  = c.get("tokens", 0)
+    ctx_out = 0
+
+ctx_tok_total = int(ctx_in) + int(ctx_out)
+ctx_pct = int(round(float(ctx_pct or 0)))
+
+# Session output tokens — from cache (hook-computed)
+sess_out = (cache.get("session") or {}).get("outputTokens", 0)
+
+# Rate limits — prefer stdin official, fall back to cache.quota
+rl = stdin.get("rate_limits") or {}
+five  = rl.get("five_hour") or {}
+seven = rl.get("seven_day") or {}
+
+if not five and not seven:
+    q = cache.get("quota") or {}
+    five  = q.get("fiveHour") or {}
+    seven = q.get("sevenDay") or {}
+    five_pct  = five.get("utilization")
+    seven_pct = seven.get("utilization")
+    five_reset_raw  = five.get("resets_at")
+    seven_reset_raw = seven.get("resets_at")
+else:
+    five_pct  = five.get("used_percentage")
+    seven_pct = seven.get("used_percentage")
+    five_reset_raw  = five.get("resets_at")
+    seven_reset_raw = seven.get("resets_at")
+
+def pct_to_int(p):
+    if p is None: return -1
+    try: return int(round(float(p)))
+    except: return -1
+
+five_pct  = pct_to_int(five_pct)
+seven_pct = pct_to_int(seven_pct)
+five_reset  = reset_str(five_reset_raw)
+seven_reset = reset_str(seven_reset_raw)
+
+# Emit one field per line for shell to parse
 print(ctx_pct)
-print(ctx_tok)
-print(ctx_win)
-print(sess_out)
+print(fmt(ctx_tok_total))
+print(fmt(ctx_win))
+print(fmt(sess_out))
 print(five_pct)
 print(five_reset)
 print(seven_pct)
@@ -102,23 +165,23 @@ color_for_pct() {
 RESET='\033[0m'
 GRAY='\033[90m'
 
-# CTX bar — always shown
+# Line 1 — CTX (always)
 CTX_COLOR=$(color_for_pct "$CTX_PCT")
 CTX_BAR=$(make_bar "$CTX_PCT" 10)
-printf "${GRAY}CTX${RESET} ${CTX_COLOR}${CTX_BAR}${RESET} ${CTX_PCT}%% ${GRAY}${CTX_TOK}/${CTX_WIN}${RESET} ${GRAY}[sess:${SESS_OUT}]${RESET}"
+printf "${GRAY}CTX${RESET} ${CTX_COLOR}${CTX_BAR}${RESET} %3d%% ${GRAY}${CTX_TOK}/${CTX_WIN}${RESET} ${GRAY}[sess:${SESS_OUT}]${RESET}" "$CTX_PCT"
 
-# 5H bar — only when quota data present
+# Line 2 — 5H (only if available)
 if [ -n "$FIVE_PCT" ] && [ "$FIVE_PCT" -ge 0 ]; then
   FIVE_COLOR=$(color_for_pct "$FIVE_PCT")
-  FIVE_BAR=$(make_bar "$FIVE_PCT" 8)
-  printf "  ${GRAY}5H${RESET} ${FIVE_COLOR}${FIVE_BAR}${RESET} ${FIVE_PCT}%%"
-  [ -n "$FIVE_RESET" ] && printf " ${GRAY}↻${FIVE_RESET}${RESET}"
+  FIVE_BAR=$(make_bar "$FIVE_PCT" 10)
+  printf "\n${GRAY}5H ${RESET} ${FIVE_COLOR}${FIVE_BAR}${RESET} %3d%%" "$FIVE_PCT"
+  [ -n "$FIVE_RESET" ] && printf " ${GRAY}↻ ${FIVE_RESET}${RESET}"
 fi
 
-# 7D bar — only when quota data present
+# Line 3 — 7D (only if available)
 if [ -n "$SEVEN_PCT" ] && [ "$SEVEN_PCT" -ge 0 ]; then
   SEVEN_COLOR=$(color_for_pct "$SEVEN_PCT")
-  SEVEN_BAR=$(make_bar "$SEVEN_PCT" 8)
-  printf "  ${GRAY}7D${RESET} ${SEVEN_COLOR}${SEVEN_BAR}${RESET} ${SEVEN_PCT}%%"
-  [ -n "$SEVEN_RESET" ] && printf " ${GRAY}↻${SEVEN_RESET}${RESET}"
+  SEVEN_BAR=$(make_bar "$SEVEN_PCT" 10)
+  printf "\n${GRAY}7D ${RESET} ${SEVEN_COLOR}${SEVEN_BAR}${RESET} %3d%%" "$SEVEN_PCT"
+  [ -n "$SEVEN_RESET" ] && printf " ${GRAY}↻ ${SEVEN_RESET}${RESET}"
 fi

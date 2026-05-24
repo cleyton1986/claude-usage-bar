@@ -86,10 +86,12 @@ All values come straight from Claude Code itself — no network calls, no third-
 - `context_window.used_percentage` (and `context_window_size`) — written by Claude Code after each API response
 - Falls back to summing `input_tokens + cache_read + cache_creation` from the current JSONL transcript when stdin is unavailable
 
-**5-hour and 7-day quota bars (5H, 7D)** — from the `rate_limits` field on stdin:
-- `rate_limits.five_hour.used_percentage` + `resets_at`
-- `rate_limits.seven_day.used_percentage` + `resets_at`
-- This field is sent by Claude Code only for Claude.ai Pro/Max subscribers; on API-key setups it is absent and the bars are simply skipped (the 5h/7d limits do not apply to API-billed accounts).
+**5-hour and 7-day quota bars (5H, 7D)** — two-tier source:
+
+1. **Primary**: from `rate_limits.five_hour` / `rate_limits.seven_day` on stdin. Sent by Claude Code only for Claude.ai Pro/Max subscribers, and only when the API response carries the `anthropic-ratelimit-*` headers (some proxies strip them).
+2. **Fallback**: when stdin lacks `rate_limits`, the `UserPromptSubmit` hook queries `https://api.anthropic.com/api/oauth/usage` using the OAuth token already stored in `~/.claude/.credentials.json`, and writes the values into `~/.claude/.usage-bar-cache.json`. The status line reads them from there.
+
+If neither source is available (e.g. API-key-only setup), the 5H/7D bars are simply skipped — the limits don't apply to API-billed accounts.
 
 The percentages match the ones shown on the [claude.ai](https://claude.ai) dashboard — same source, same numbers.
 
@@ -97,23 +99,17 @@ The percentages match the ones shown on the [claude.ai](https://claude.ai) dashb
 
 ## Uninstall
 
-In Claude Code:
+Run the cleanup command first, then uninstall the plugin itself:
 
 ```text
+/usage-bar:uninstall
 /plugin uninstall claude-usage-bar@claude-usage-bar
 ```
 
-To restore the original status line:
+`/usage-bar:uninstall` restores your previous `statusLine` command (if any), removes the cache file, the saved previous-statusLine file, and the one-shot backup. If you skip it and run only `/plugin uninstall`, the next session will detect the stale `statusLine` entry pointing to the removed plugin cache and the bar simply won't render — your shell isn't affected, but you'll want to clear the dead entry manually:
 
 ```bash
-cp ~/.claude/settings.json.usage-bar.bak ~/.claude/settings.json
-```
-
-To remove leftover files:
-
-```bash
-rm -f ~/.claude/.usage-bar-cache.json \
-      ~/.claude/.usage-bar-prev-statusline
+node -e "const fs=require('fs'),p=require('os').homedir()+'/.claude/settings.json';const s=JSON.parse(fs.readFileSync(p,'utf8'));delete s.statusLine;fs.writeFileSync(p,JSON.stringify(s,null,2)+'\n')"
 ```
 
 ---

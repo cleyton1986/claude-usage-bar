@@ -3,17 +3,17 @@
 Live progress bars in the Claude Code status line, showing **context window usage**, **5-hour session quota** and **7-day weekly quota** — the same numbers that appear on the [claude.ai](https://claude.ai) dashboard.
 
 ```
-CONTEXT -      ███░░░░░░░  30% 306k/1.0M [sess:166k]
-Tokens session ███░░░░░░░  33% ↻ 47m
-Tokens Week    █░░░░░░░░░  17% ↻ 2d
+CONTEXT(Sonnet-4-6) ███░░░░░░░  30% 306k/1.0M [sess:166k]
+Tokens session      ███░░░░░░░  33% ↻ 47m
+Tokens Week         █░░░░░░░░░  17% ↻ 2d
 ```
 
-- **CONTEXT -** — current model context window usage (input + cache tokens of the latest assistant response), with output tokens accumulated in the current session
+- **CONTEXT(Model)** — current model context window usage (input + cache tokens of the latest assistant response), with output tokens accumulated in the current session. The active model name is read dynamically from the current Claude Code transcript and highlighted in red.
 - **Tokens session** — five-hour quota utilisation, with time until reset (Claude Pro/Max only)
 - **Tokens Week** — seven-day quota utilisation, with time until reset (Claude Pro/Max only)
 - **Color-coded** — green ≤70%, yellow 70–90%, red >90%
 - **Combines with existing status lines** — wraps any prior `statusLine` command instead of replacing it
-- **Quota bars** appear only when you are signed in with a Pro or Max plan; on free / API-only setups, only **CONTEXT -** is shown
+- **Quota bars** appear only when you are signed in with a Pro or Max plan; on free / API-only setups, only **CONTEXT(Model)** is shown
 
 ---
 
@@ -81,7 +81,7 @@ No configuration required. The plugin auto-detects the current model, its contex
 
 All values come straight from Claude Code itself — no network calls, no third-party endpoints.
 
-**Context bar (CONTEXT -)** — from the `context_window` field on stdin:
+**Context bar (CONTEXT(Model))** — from the `context_window` field on stdin:
 - `context_window.used_percentage` (and `context_window_size`) — written by Claude Code after each API response
 - Falls back to summing `input_tokens + cache_read + cache_creation` from the current JSONL transcript when stdin is unavailable
 
@@ -119,7 +119,7 @@ node -e "const fs=require('fs'),p=require('os').homedir()+'/.claude/settings.jso
 - Restart Claude Code — the `SessionStart` hook only fires on a new session
 - Check `~/.claude/settings.json` — the `statusLine.command` should point to `.../claude-usage-bar/.../src/wrapper.sh`
 
-**Only CONTEXT - bar shows, no Tokens session / Tokens Week**
+**Only CONTEXT(Model) bar shows, no Tokens session / Tokens Week**
 - Expected if you're on an API-key setup (no Pro/Max plan) — these limits don't exist for API-billed accounts
 - Or the session hasn't made its first API call yet (rate-limit fields appear only after the first response)
 

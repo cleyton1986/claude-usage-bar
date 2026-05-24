@@ -186,6 +186,11 @@ async function main() {
     },
     session: { outputTokens: sessionOutputTokens },
     quota,
+    debug: {
+      hadTranscriptPath: !!transcriptPath,
+      hadOauthToken: !!oauth,
+      quotaSource: quota ? (cacheAge < 60_000 ? 'ttl-cache' : 'http-fetch') : 'none',
+    },
   };
 
   try { fs.writeFileSync(cacheFile, JSON.stringify(cache)); } catch {}

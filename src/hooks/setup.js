@@ -1,18 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 
-// SessionStart hook — wires claude-usage-bar into the user's statusLine,
-// combining with any existing statusLine script (wrapper mode).
+// SessionStart hook — wires claude-usage-bar into the user's statusLine.
 //
 // Behavior:
-//   - First run: detects current statusLine, saves it, installs wrapper
-//   - Subsequent runs: idempotent, does nothing if already wired
-//   - Safe: never overwrites unrelated settings, makes one-shot .bak backup
-//
-// Files written:
-//   ~/.claude/settings.json                        (statusLine field only)
-//   ~/.claude/.usage-bar-prev-statusline           (previous statusLine cmd)
-//   ~/.claude/settings.json.usage-bar.bak          (one-shot backup, first install)
+//   - Detects stale state from a previous install (broken statusLine path
+//     pointing to a deleted plugin cache directory) and self-heals
+//   - Backs up the current settings.json once, on first install
+//   - Saves the existing statusLine command so the wrapper can call it
+//   - Idempotent: re-running with the same plugin version is a no-op
 
 const fs = require('fs');
 const path = require('path');
@@ -41,38 +37,55 @@ function isOurWrapper(cmd) {
     && cmd.includes('wrapper.sh');
 }
 
+function commandTargetExists(cmd) {
+  // Extract the path between quotes after "bash"
+  // bash "<path>"  or  bash <path>
+  if (typeof cmd !== 'string') return false;
+  const quoted = cmd.match(/bash\s+"([^"]+)"/);
+  const unquoted = cmd.match(/bash\s+(\S+)/);
+  const target = (quoted || unquoted || [])[1];
+  if (!target) return true;  // unknown shape — don't claim it's missing
+  try { fs.accessSync(target, fs.constants.R_OK); return true; }
+  catch { return false; }
+}
+
 function main() {
   const settings = readSettings();
   const current = settings.statusLine;
   const currentCmd = current && current.type === 'command' ? current.command : null;
 
-  // Already wired — nothing to do
-  if (isOurWrapper(currentCmd)) {
+  // Already pointing to OUR current wrapper — nothing to do
+  if (currentCmd === `bash "${wrapperScript}"`) {
     process.exit(0);
   }
 
-  // One-shot backup before first modification
+  // Detect stale state: settings points to a previous version of our wrapper
+  // whose cache directory was removed. Treat it as "no previous statusLine"
+  // rather than saving the broken path.
+  const isStaleOurWrapper = isOurWrapper(currentCmd) && !commandTargetExists(currentCmd);
+
+  // One-shot backup (only the first time we ever modify settings)
   if (fs.existsSync(settingsPath) && !fs.existsSync(backupPath)) {
     try { fs.copyFileSync(settingsPath, backupPath); } catch {}
   }
 
-  // Save previous statusLine command so wrapper.sh can call it
-  if (currentCmd && !isOurWrapper(currentCmd)) {
+  // Save previous statusLine command (unless it's ours, broken or current)
+  if (currentCmd && !isOurWrapper(currentCmd) && !isStaleOurWrapper) {
     try { fs.writeFileSync(prevCmdFile, currentCmd, { mode: 0o600 }); } catch {}
-  } else {
+  } else if (!fs.existsSync(prevCmdFile)) {
     try { fs.writeFileSync(prevCmdFile, '', { mode: 0o600 }); } catch {}
   }
+  // else: keep the existing prev-cmd file (carries the user's original command
+  // across plugin version bumps)
 
   settings.statusLine = {
     type: 'command',
     command: `bash "${wrapperScript}"`,
   };
 
-  try {
-    writeSettings(settings);
-  } catch (err) {
+  try { writeSettings(settings); }
+  catch (err) {
     process.stderr.write(`[claude-usage-bar] failed to update settings.json: ${err.message}\n`);
-    process.exit(0);
   }
 
   process.exit(0);

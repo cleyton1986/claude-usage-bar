@@ -3,18 +3,17 @@
 Live progress bars in the Claude Code status line, showing **context window usage**, **5-hour session quota** and **7-day weekly quota** — the same numbers that appear on the [claude.ai](https://claude.ai) dashboard.
 
 ```
-[CAVEMAN]
-CTX ███░░░░░░░  30% 306k/1.0M [sess:166k]
-5H  ███░░░░░░░  33% ↻ 47m
-7D  █░░░░░░░░░  17% ↻ 2d
+CONTEXT -      ███░░░░░░░  30% 306k/1.0M [sess:166k]
+Tokens session ███░░░░░░░  33% ↻ 47m
+Tokens Week    █░░░░░░░░░  17% ↻ 2d
 ```
 
-- **CTX** — current model context window usage (input + cache tokens of the latest assistant response), with output tokens accumulated in the current session
-- **5H** — five-hour quota utilisation, with time until reset (Claude Pro/Max only)
-- **7D** — seven-day quota utilisation, with time until reset (Claude Pro/Max only)
+- **CONTEXT -** — current model context window usage (input + cache tokens of the latest assistant response), with output tokens accumulated in the current session
+- **Tokens session** — five-hour quota utilisation, with time until reset (Claude Pro/Max only)
+- **Tokens Week** — seven-day quota utilisation, with time until reset (Claude Pro/Max only)
 - **Color-coded** — green ≤70%, yellow 70–90%, red >90%
-- **Combines with existing status lines** — wraps any prior `statusLine` command (e.g. `caveman`) instead of replacing it
-- **Quota bars** appear only when you are signed in with a Pro or Max plan; on free / API-only setups, only **CTX** is shown
+- **Combines with existing status lines** — wraps any prior `statusLine` command instead of replacing it
+- **Quota bars** appear only when you are signed in with a Pro or Max plan; on free / API-only setups, only **CONTEXT -** is shown
 
 ---
 
@@ -82,16 +81,16 @@ No configuration required. The plugin auto-detects the current model, its contex
 
 All values come straight from Claude Code itself — no network calls, no third-party endpoints.
 
-**Context bar (CTX)** — from the `context_window` field on stdin:
+**Context bar (CONTEXT -)** — from the `context_window` field on stdin:
 - `context_window.used_percentage` (and `context_window_size`) — written by Claude Code after each API response
 - Falls back to summing `input_tokens + cache_read + cache_creation` from the current JSONL transcript when stdin is unavailable
 
-**5-hour and 7-day quota bars (5H, 7D)** — two-tier source:
+**Tokens session and Tokens Week quota bars** — two-tier source:
 
 1. **Primary**: from `rate_limits.five_hour` / `rate_limits.seven_day` on stdin. Sent by Claude Code only for Claude.ai Pro/Max subscribers, and only when the API response carries the `anthropic-ratelimit-*` headers (some proxies strip them).
 2. **Fallback**: when stdin lacks `rate_limits`, the `UserPromptSubmit` hook queries `https://api.anthropic.com/api/oauth/usage` using the OAuth token already stored in `~/.claude/.credentials.json`, and writes the values into `~/.claude/.usage-bar-cache.json`. The status line reads them from there.
 
-If neither source is available (e.g. API-key-only setup), the 5H/7D bars are simply skipped — the limits don't apply to API-billed accounts.
+If neither source is available (e.g. API-key-only setup), the Tokens session/Tokens Week bars are simply skipped — the limits don't apply to API-billed accounts.
 
 The percentages match the ones shown on the [claude.ai](https://claude.ai) dashboard — same source, same numbers.
 
@@ -120,7 +119,7 @@ node -e "const fs=require('fs'),p=require('os').homedir()+'/.claude/settings.jso
 - Restart Claude Code — the `SessionStart` hook only fires on a new session
 - Check `~/.claude/settings.json` — the `statusLine.command` should point to `.../claude-usage-bar/.../src/wrapper.sh`
 
-**Only CTX bar shows, no 5H / 7D**
+**Only CONTEXT - bar shows, no Tokens session / Tokens Week**
 - Expected if you're on an API-key setup (no Pro/Max plan) — these limits don't exist for API-billed accounts
 - Or the session hasn't made its first API call yet (rate-limit fields appear only after the first response)
 

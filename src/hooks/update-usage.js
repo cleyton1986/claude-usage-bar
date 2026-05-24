@@ -45,6 +45,29 @@ function readJson(file, fallback = null) {
   catch { return fallback; }
 }
 
+function findLatestTranscript() {
+  const root = path.join(claudeDir, 'projects');
+  let latest = null;
+  function walk(dir) {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+    catch { return; }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+        try {
+          const mtime = fs.statSync(full).mtimeMs;
+          if (!latest || mtime > latest.mtime) latest = { path: full, mtime };
+        } catch {}
+      }
+    }
+  }
+  walk(root);
+  return latest ? latest.path : null;
+}
+
 function getOAuthToken() {
   const creds = readJson(credentialsFile);
   if (!creds || !creds.claudeAiOauth) return null;
@@ -110,7 +133,7 @@ async function main() {
   let hookData = {};
   try { hookData = JSON.parse(input); } catch {}
 
-  const transcriptPath = hookData.transcript_path || null;
+  const transcriptPath = hookData.transcript_path || findLatestTranscript();
 
   // Local: context + session tokens from JSONL
   let ctxTokens = 0;

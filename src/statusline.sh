@@ -106,7 +106,26 @@ def short_model(model):
     return model
 
 
+def latest_transcript_path():
+    root = os.path.join(os.environ.get('CLAUDE_CONFIG_DIR') or os.path.expanduser('~/.claude'), 'projects')
+    latest = ('', -1)
+    for base, _, files in os.walk(root):
+        for name in files:
+            if not name.endswith('.jsonl'):
+                continue
+            path = os.path.join(base, name)
+            try:
+                mtime = os.path.getmtime(path)
+            except Exception:
+                continue
+            if mtime > latest[1]:
+                latest = (path, mtime)
+    return latest[0]
+
+
 def latest_model_from_transcript(path):
+    if not path or not os.path.exists(path):
+        path = latest_transcript_path()
     if not path or not os.path.exists(path):
         return ''
     try:

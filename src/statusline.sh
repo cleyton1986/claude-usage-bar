@@ -8,7 +8,20 @@ CACHE="$CLAUDE_DIR/.usage-bar-cache.json"
 CONFIG="$CLAUDE_DIR/.usage-bar-config.json"
 STDIN=$(cat 2>/dev/null || true)
 
-STDIN="$STDIN" CLAUDE_DIR="$CLAUDE_DIR" CACHE="$CACHE" CONFIG="$CONFIG" python3 <<'PYEOF'
+# On Cygwin/Windows: native Python needs Windows-style paths; convert if cygpath available
+if command -v cygpath >/dev/null 2>&1; then
+  CLAUDE_DIR_PY=$(cygpath -w "$CLAUDE_DIR")
+  CACHE_PY=$(cygpath -w "$CACHE")
+  CONFIG_PY=$(cygpath -w "$CONFIG")
+else
+  CLAUDE_DIR_PY="$CLAUDE_DIR"
+  CACHE_PY="$CACHE"
+  CONFIG_PY="$CONFIG"
+fi
+
+STDIN="$STDIN" CLAUDE_DIR="$CLAUDE_DIR_PY" CACHE="$CACHE_PY" CONFIG="$CONFIG_PY" PYTHONIOENCODING=utf-8 python3 <<'PYEOF'
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 import json
 import os
 import re

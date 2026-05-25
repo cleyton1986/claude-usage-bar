@@ -262,14 +262,14 @@ show_week = bool_cfg(config, 'show_week', True)
 transcript = find_latest_transcript(claude_dir)
 
 # --- Model: real-time from transcript ---
-model = latest_model_from_transcript(transcript)
-if not model:
+raw_model = latest_model_from_transcript(transcript)
+if not raw_model:
     stdin_model = stdin.get('model')
     if isinstance(stdin_model, dict):
-        model = stdin_model.get('id') or stdin_model.get('name') or ''
+        raw_model = stdin_model.get('id') or stdin_model.get('name') or ''
     elif stdin_model:
-        model = str(stdin_model)
-model = short_model(model)
+        raw_model = str(stdin_model)
+model = short_model(raw_model)
 
 # --- Context: real-time from transcript ---
 ctx_pct = None
@@ -280,14 +280,18 @@ sess_out = 0
 stdin_ctx = stdin.get('context_window') or {}
 if stdin_ctx.get('used_percentage') is not None:
     ctx_pct = stdin_ctx.get('used_percentage')
-    ctx_win = stdin_ctx.get('context_window_size') or ctx_window_for_model(model)
+    stdin_win = stdin_ctx.get('context_window_size') or 0
+    model_win = ctx_window_for_model(raw_model)
+    ctx_win = max(stdin_win, model_win)
     ctx_total = (stdin_ctx.get('total_input_tokens') or 0) + (stdin_ctx.get('total_output_tokens') or 0)
+    if ctx_win > stdin_win and ctx_total > 0:
+        ctx_pct = min(100, (ctx_total / ctx_win) * 100)
 
 if ctx_pct is None and transcript:
     td = read_transcript_usage(transcript)
     if td:
         u = td['usage']
-        ctx_win = ctx_window_for_model(td.get('model') or model)
+        ctx_win = ctx_window_for_model(td.get('model') or raw_model)
         ctx_total = (u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0)
         if ctx_total > ctx_win:
             ctx_win = 1000000

@@ -24,13 +24,13 @@ Tokens Week         █░░░░░░░░░  17% ↻ 2d
 - bash `>=` 4
 - python3
 
-Tested on Linux. Should work on macOS and WSL. Not tested on native Windows (PowerShell).
+Tested on Linux and native Windows with Cygwin bash. Should work on macOS and WSL.
 
 ---
 
 ## Installation
 
-### Option A — Terminal (works on macOS, Linux, WSL)
+### Option A — Terminal (works on macOS, Linux, Windows with Cygwin bash, WSL)
 
 Run these three commands in your terminal:
 
@@ -149,6 +149,12 @@ node -e "const fs=require('fs'),p=require('os').homedir()+'/.claude/settings.jso
 
 **`settings.json` keeps getting reset**
 - Some launchers (e.g. provider-switcher scripts) overwrite `~/.claude/settings.json` on each start. Check `~/.zshrc` / `~/.bashrc` for `alias claude=` lines pointing to a switcher script.
+
+**Windows-specific: bars not showing or garbled output**
+- Ensure **Cygwin bash** is installed and `bash` is on your PATH — the plugin shell scripts require it
+- Ensure **Python 3** is installed — the renderer is an inline Python script inside `statusline.sh`
+- If you see a `UnicodeEncodeError` in the logs, your Python is using the wrong encoding — the v1.2.0+ fix adds `PYTHONIOENCODING=utf-8` automatically
+- If transcript/model data is missing, verify `cygpath` is available (it ships with Cygwin) — it converts Cygwin paths to Windows paths for Python
 
 ---
 

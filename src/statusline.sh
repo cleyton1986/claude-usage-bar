@@ -300,12 +300,8 @@ sess_out = 0
 stdin_ctx = stdin.get('context_window') or {}
 if stdin_ctx.get('used_percentage') is not None:
     ctx_pct = stdin_ctx.get('used_percentage')
-    stdin_win = stdin_ctx.get('context_window_size') or 0
-    model_win = ctx_window_for_model(raw_model)
-    ctx_win = max(stdin_win, model_win)
+    ctx_win = stdin_ctx.get('context_window_size') or ctx_window_for_model(raw_model)
     ctx_total = (stdin_ctx.get('total_input_tokens') or 0) + (stdin_ctx.get('total_output_tokens') or 0)
-    if ctx_win > stdin_win and ctx_total > 0:
-        ctx_pct = min(100, (ctx_total / ctx_win) * 100)
 
 if ctx_pct is None and transcript:
     td = read_transcript_usage(transcript)

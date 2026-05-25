@@ -24,12 +24,17 @@ const credentialsFile = path.join(claudeDir, '.credentials.json');
 
 // Context window per model family (tokens). More specific patterns first.
 const CONTEXT_WINDOW = [
-  [/\[1m\]$/,                          1000000],
-  [/^claude-sonnet-4.*-1m/,            1000000],
-  [/^claude-(opus|sonnet|haiku)-4/,    200000],
-  [/^claude-3-5/,                      200000],
-  [/^claude-3-7/,                      200000],
-  [/^claude-3-(opus|sonnet|haiku)/,    200000],
+  // explicit 1M variants (proxy/custom suffixes)
+  [/\[1m\]/,                                       1000000],
+  [/-1m($|-)/,                                     1000000],
+  // claude 4.x: opus-4.x and sonnet-4.6+ are 1M; sonnet-4.5/haiku-4.5 are 200k
+  [/^claude-(opus)-4/,                             1000000],
+  [/^claude-sonnet-4-6/,                           1000000],
+  [/^claude-sonnet-4-7/,                           1000000],
+  [/^claude-(sonnet|haiku)-4-5/,                   200000],
+  [/^claude-(sonnet|haiku)-4/,                     200000],
+  // claude 3.x all 200k
+  [/^claude-3/,                                    200000],
 ];
 
 function contextWindowForModel(model) {

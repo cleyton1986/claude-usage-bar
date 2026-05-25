@@ -104,6 +104,24 @@ def make_bar(pct, width):
     return '█' * filled + '░' * (width - filled)
 
 
+def ctx_window_for_model(model):
+    if not model:
+        return 200000
+    m = model.lower()
+    # explicit 1M suffix variants
+    if '[1m]' in m or '-1m' in m:
+        return 1000000
+    # claude 4: opus-4.x always 1M; sonnet-4.6+ is 1M; sonnet/haiku-4.5 is 200k
+    if re.match(r'claude-opus-4', m):
+        return 1000000
+    if re.match(r'claude-sonnet-4-[6-9]', m):
+        return 1000000
+    if re.match(r'claude-sonnet-4-\d\d', m) and not re.match(r'claude-sonnet-4-[0-5]', m):
+        return 1000000
+    # claude-3.x and all others: 200k
+    return 200000
+
+
 def short_model(model):
     if not model:
         return ''
@@ -262,14 +280,14 @@ sess_out = 0
 stdin_ctx = stdin.get('context_window') or {}
 if stdin_ctx.get('used_percentage') is not None:
     ctx_pct = stdin_ctx.get('used_percentage')
-    ctx_win = stdin_ctx.get('context_window_size')
+    ctx_win = stdin_ctx.get('context_window_size') or ctx_window_for_model(model)
     ctx_total = (stdin_ctx.get('total_input_tokens') or 0) + (stdin_ctx.get('total_output_tokens') or 0)
 
 if ctx_pct is None and transcript:
     td = read_transcript_usage(transcript)
     if td:
         u = td['usage']
-        ctx_win = 200000
+        ctx_win = ctx_window_for_model(td.get('model') or model)
         ctx_total = (u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0)
         if ctx_total > ctx_win:
             ctx_win = 1000000

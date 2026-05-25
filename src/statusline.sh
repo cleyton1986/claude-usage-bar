@@ -348,18 +348,24 @@ if show_context:
         prefix = f'{GRAY}{ctx_label.ljust(label_width)}{RESET}'
     lines.append(f'{prefix} {color_for_pct(ctx_pct)}{bar}{RESET} {ctx_pct:3d}% {GRAY}{fmt(ctx_total)}/{fmt(ctx_win)}{RESET} {GRAY}[sess:{fmt(sess_out)}]{RESET}')
 
-if show_session and five_pct >= 0:
-    bar = make_bar(five_pct, bar_width)
-    line = f'{GRAY}{"Tokens session".ljust(label_width)}{RESET} {color_for_pct(five_pct)}{bar}{RESET} {five_pct:3d}%'
+if show_session:
+    fpct = max(0, five_pct)
+    bar = make_bar(fpct, bar_width)
+    line = f'{GRAY}{"Tokens session".ljust(label_width)}{RESET} {color_for_pct(fpct)}{bar}{RESET} {fpct:3d}%'
     if five_reset:
         line += f' {GRAY}↻ {five_reset}{RESET}'
+    elif five_pct < 0:
+        line += f' {GRAY}--{RESET}'
     lines.append(line)
 
-if show_week and seven_pct >= 0:
-    bar = make_bar(seven_pct, bar_width)
-    line = f'{GRAY}{"Tokens Week".ljust(label_width)}{RESET} {color_for_pct(seven_pct)}{bar}{RESET} {seven_pct:3d}%'
+if show_week:
+    spct = max(0, seven_pct)
+    bar = make_bar(spct, bar_width)
+    line = f'{GRAY}{"Tokens Week".ljust(label_width)}{RESET} {color_for_pct(spct)}{bar}{RESET} {spct:3d}%'
     if seven_reset:
         line += f' {GRAY}↻ {seven_reset}{RESET}'
+    elif seven_pct < 0:
+        line += f' {GRAY}--{RESET}'
     lines.append(line)
 
 print('\n'.join(lines), end='')

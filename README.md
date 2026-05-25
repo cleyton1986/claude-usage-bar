@@ -79,7 +79,7 @@ claude plugins install claude-usage-bar@claude-usage-bar
 
 ## Configuration
 
-No configuration required. The plugin auto-detects the current model, its context window (200k or 1M for `[1m]` variants) and your plan tier.
+No configuration required. The plugin auto-detects the current model, its context window (200k or 1M) and your plan tier. The `[1m]` and `-1m` model suffixes are used internally for context window detection but stripped from the display name to avoid ANSI escape collisions.
 
 ---
 

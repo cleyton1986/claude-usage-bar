@@ -207,18 +207,36 @@ def read_transcript_usage(path):
 
 
 def fetch_oauth_usage(claude_dir):
-    """Fetch quota from Anthropic OAuth endpoint — real-time."""
+    """Fetch quota from Anthropic OAuth endpoint. On failure, returns last successful result."""
     import urllib.request
+    import time
+    quota_cache_path = os.path.join(claude_dir, '.usage-bar-quota-live.json')
+
+    def load_cached():
+        try:
+            with open(quota_cache_path) as f:
+                c = json.load(f)
+            return c.get('data') if c else None
+        except Exception:
+            return None
+
+    def save_cached(data):
+        try:
+            with open(quota_cache_path, 'w') as f:
+                json.dump({'ts': time.time(), 'data': data}, f)
+        except Exception:
+            pass
+
     creds_path = os.path.join(claude_dir, '.credentials.json')
     try:
         with open(creds_path) as f:
             creds = json.load(f)
     except Exception:
-        return None
+        return load_cached()
     oauth = creds.get('claudeAiOauth') or {}
     token = oauth.get('accessToken')
     if not token:
-        return None
+        return load_cached()
     try:
         req = urllib.request.Request(
             'https://api.anthropic.com/api/oauth/usage',
@@ -230,9 +248,11 @@ def fetch_oauth_usage(claude_dir):
             }
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
-            return json.loads(resp.read())
+            data = json.loads(resp.read())
+            save_cached(data)
+            return data
     except Exception:
-        return None
+        return load_cached()
 
 
 def bool_cfg(config, key, default=True):

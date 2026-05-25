@@ -201,6 +201,14 @@ async function main() {
   };
 
   try { fs.writeFileSync(cacheFile, JSON.stringify(cache)); } catch {}
+
+  // Also persist to quota-live.json for statusline.sh resilience against OAuth 429
+  if (quota && quotaSource === 'http-fetch') {
+    const quotaLiveFile = path.join(claudeDir, '.usage-bar-quota-live.json');
+    const liveData = { five_hour: quota.fiveHour, seven_day: quota.sevenDay };
+    try { fs.writeFileSync(quotaLiveFile, JSON.stringify({ ts: Date.now(), data: liveData })); } catch {}
+  }
+
   process.exit(0);
 }
 

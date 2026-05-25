@@ -128,8 +128,13 @@ def short_model(model):
     model = re.sub(r'-\d{8}$', '', str(model))
     parts = model.split('-')
     if len(parts) >= 4 and parts[0] == 'claude':
-        return f'{parts[1].capitalize()}-{"-".join(parts[2:])}'
-    return model
+        name = f'{parts[1].capitalize()}-{"-".join(parts[2:])}'
+    else:
+        name = model
+    # strip 1M variant suffixes — already used for ctx_window on raw_model, and
+    # [1m] collides with ANSI bold escape in some terminal renderers
+    name = re.sub(r'(\[1m\]|-1m)$', '', name, flags=re.IGNORECASE)
+    return name
 
 
 def find_latest_transcript(claude_dir):
